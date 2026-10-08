@@ -1,12 +1,12 @@
-# Mod Runtime v1 — Beta 0.2.4
+# Mod Runtime v1 — Beta 0.2.5
 
-The shipped build is `src/guy_fights_0.2.4.html`, a standalone HTML file with the runtime and schemas embedded. `src/guy_fights_0.2.2.html` and `src/guy_fights_0.2.3.html` are preserved byte-for-byte. No public registry entries were added. This feature is implemented in the game repository, not in the registry repository.
+The shipped build is `src/guy_fights_0.2.5.html`, a standalone HTML file with the runtime and schemas embedded. `src/guy_fights_0.2.2.html`, `src/guy_fights_0.2.3.html`, and `src/guy_fights_0.2.4.html` are preserved byte-for-byte. No public registry entries were added. This feature is implemented in the game repository, not in the registry repository.
 
 ## Protocol provenance
 
 The public contract is [GuyFights/guy-fights-mods](https://github.com/GuyFights/guy-fights-mods), commit `4a0ee09b88b34e044251fef0c685cb7216ea5819`: README, `docs/mod-api-v1.md` including integration notes, manifest/catalog schemas, offline validator, and both example manifests. The two files under `src/mod-runtime/*.schema.json` are verbatim snapshots of those authoritative schemas. There is no second format, schema download at startup, or remote code dependency. The runtime implements the exact validation keywords used by these snapshots; unsupported schema keywords fail closed. When updating snapshots, review keyword support and adapters, then run the tests.
 
-The original source SHA-256 is `83d13e6e5c167c4c0b1abe882ad17a690d844e2afd5da61eec2347b064539810`. The new build identifies itself as Beta 0.2.4 but retains the 0.2.2 game data and mechanics except the explicit Mod Runtime integration. Compatibility is checked against `0.2.4`; manifests accepting `0.2.2` through `0.2.x` work. An exact maximum of `0.2.2` is correctly incompatible with this newer build.
+The original source SHA-256 is `83d13e6e5c167c4c0b1abe882ad17a690d844e2afd5da61eec2347b064539810`. The new build identifies itself as Beta 0.2.5 but retains the 0.2.2 game data and mechanics except the explicit Mod Runtime integration. Compatibility is checked against `0.2.5`; manifests accepting `0.2.2` through `0.2.x` work. An exact maximum of `0.2.2` is correctly incompatible with this newer build.
 
 ## Base definitions and application
 
@@ -81,7 +81,7 @@ Browse resolves `/mods/index.json` against the current page origin and fetches i
 
 GitHub remains the source of truth. Production registry JSON is mirrored to the Neocities site because hosting CSP blocks direct GitHub registry fetches. Copy the repository `index.json` to `/mods/index.json` and each `mods/<slug>/mod.json` to `/mods/<slug>/mod.json`, preserving matching metadata. Publish manifests before the catalog so entries do not point to missing files. No automatic mirroring or deployment is included in this hotfix.
 
-Manifest URLs must resolve to the current HTTPS page origin and match `/mods/<slug>/mod.json`. Catalog paths such as `mods/drunk-guy-overdrive/mod.json` resolve from the origin root, not from `/mods/index.json` (which would duplicate `/mods/`). Root-relative paths and absolute same-origin HTTPS URLs are also accepted. Slugs follow the public ID syntax and 64-character limit; prototype-sensitive IDs are rejected. HTTP and file pages cannot browse remotely; installed and local imported mods remain usable. Credentials, query strings, fragments, traversal, percent/backslash tricks, script extensions, and other origins are rejected. Requests omit credentials, disallow redirects, have a 10-second timeout, and enforce streaming byte limits (1 MiB catalog, 256 KiB manifest). JSON parsing rejects duplicate and prototype-sensitive keys, nesting deeper than 16, and all nonfinite numbers including overflow. Remote names/descriptions/tags are rendered with `textContent`. No runtime strings are evaluated or loaded as scripts. The game retains `connect-src 'self'`; no remote domain is added to CSP.
+Manifest URLs must resolve to the current HTTPS page origin and match `/mods/<slug>/mod.json`. Catalog paths such as `mods/drunk-guy-overdrive/mod.json` resolve from the origin root, not from `/mods/index.json` (which would duplicate `/mods/`). Root-relative paths and absolute same-origin HTTPS URLs are also accepted. Slugs follow the public ID syntax and 64-character limit; prototype-sensitive IDs are rejected. HTTP and file pages cannot browse remotely; installed and local imported mods remain usable. Credentials, query strings, fragments, traversal, percent/backslash tricks, script extensions, and other origins are rejected. Requests omit credentials, follow redirects and validate the final response URL before reading JSON, have a 10-second timeout, and enforce streaming byte limits (1 MiB catalog, 256 KiB manifest). JSON parsing rejects duplicate and prototype-sensitive keys, nesting deeper than 16, and all nonfinite numbers including overflow. Remote names/descriptions/tags are rendered with `textContent`. No runtime strings are evaluated or loaded as scripts. The game retains `connect-src 'self'`; no remote domain is added to CSP.
 
 The main-menu MODS dialog includes Browse/Installed sections, metadata, install/update detection, toggle, uninstall, conflict warnings, loading/offline/invalid/incompatible/application-error statuses, and an optional local JSON file import. Installation does not enable the mod. New Mod UI text is currently English; existing translation behavior and canonical IDs are preserved.
 
@@ -92,6 +92,7 @@ python -m pip install -r requirements-dev.txt
 python scripts/build_mod_runtime.py
 python scripts/check_mod_runtime.py
 node --test tests/mod-runtime.test.cjs
+# Browser tests also require OpenSSL for an ephemeral local HTTPS certificate.
 python -m playwright install chromium
 python tests/browser_smoke.py
 ```
@@ -99,3 +100,11 @@ python tests/browser_smoke.py
 The builder embeds the reviewed runtime sources and verbatim schema snapshots into a new single HTML file using checked integration anchors. No source download occurs during build. The checker verifies that the original 0.2.2 matches Git, that the generated output reproduces exactly, that JSON/schemas/fixtures validate, and that all runtime and assembled game script blocks parse.
 
 Node tests cover protocol validation, operation capabilities, limits, IDs, compatibility, duplicates, metadata agreement, enabled order, nonstacking rebuilds, persistence/corruption, active-match deferral, atomic fallback, network errors, updates, and storage failure. Chromium tests use the actual assembled game with a private mocked remote catalog: UI install/toggle/reload, editable defaults, terrain overlays, moving fighters, active-match deferral, registry errors, updates/mismatch rejection, and uninstall/base recovery. They never add examples to the public catalog. These checks exercise the new integrations, not every pre-existing special attack, controller, or translation combination.
+
+## Beta 0.2.5 network hotfix
+
+Requests use `redirect: 'follow'`, retaining omitted credentials, no referrer, timeout and byte limits. A final registry response must be HTTPS on the exact page origin with path `/mods/index.json`. A final manifest response must pass the existing `/mods/<valid-id>/mod.json` whitelist and resolve to the requested mod's path; redirects cannot substitute another manifest path. Both reject credentials, query/fragment delimiters (including empty ones), backslashes, whitespace, percent encodings and traversal. Missing response URLs fail closed.
+
+Browser Fetch does not expose intermediate redirect hops. The standalone game's existing `connect-src 'self'` CSP blocks cross-origin redirect requests; final URL validation adds a second check before processing the response. No cross-origin domain is added. Installed manifests remain usable offline and local storage keys are unchanged.
+
+Developer console diagnostics include the requested URL, final response URL and HTTP status when available, and original exception name/message. Failures before a response use null for unavailable response fields. Players see the existing concise failure messages. The hotfix addresses the suspected hosting redirect incompatibility; local HTTPS server redirects verify the behavior, but deployment to Neocities is still required to confirm the production diagnosis.

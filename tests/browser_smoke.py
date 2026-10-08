@@ -2,6 +2,9 @@
 import copy
 import json
 import threading
+import ssl
+import subprocess
+import tempfile
 import time
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
@@ -22,43 +25,65 @@ def entry(manifest):
             'manifest': 'mods/' + manifest['id'] + '/mod.json'}
 
 
+MODE = {'redirected': False, 'value': 'offline', 'manifest': copy.deepcopy(GUY)}
+
+
 class Handler(SimpleHTTPRequestHandler):
+    def do_GET(self):
+        if not self.path.startswith('/mods/'):
+            return super().do_GET()
+        if MODE['value'] == 'offline':
+            self.send_error(503)
+            return
+        if MODE['value'] in ('cross-origin', 'wrong-path'):
+            self.send_response(302)
+            self.send_header('Location', 'https://blocked.invalid/mods/index.json' if MODE['value'] == 'cross-origin' else '/other/index.json')
+            self.end_headers()
+            return
+        if MODE['value'] == 'online' and not MODE['redirected']:
+            MODE['redirected'] = True
+            self.send_response(302)
+            self.send_header('Location', self.path)
+            self.end_headers()
+            return
+        if self.path == '/mods/index.json':
+            data = {'formatVersion': 99, 'mods': []} if MODE['value'] == 'malformed' else {'formatVersion': 1, 'mods': [entry(MODE['manifest'])]}
+        else:
+            data = copy.deepcopy(MODE['manifest'])
+            if MODE['value'] == 'mismatch':
+                data['author'] = 'Mismatched author'
+        body = json.dumps(data).encode()
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/json')
+        self.send_header('Content-Length', str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
     def log_message(self, *_):
         pass
 
 
 def run():
     server = ThreadingHTTPServer(('127.0.0.1', 0), partial(Handler, directory=str(ROOT)))
+    global ORIGIN, REGISTRY
+    certificates = tempfile.TemporaryDirectory()
+    cert = str(Path(certificates.name) / 'cert.pem')
+    key = str(Path(certificates.name) / 'key.pem')
+    subprocess.run(['openssl', 'req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-keyout', key, '-out', cert, '-days', '1', '-subj', '/CN=localhost', '-addext', 'subjectAltName=IP:127.0.0.1'], check=True, capture_output=True)
+    tls = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    tls.load_cert_chain(cert, key)
+    server.socket = tls.wrap_socket(server.socket, server_side=True)
+    ORIGIN = f'https://127.0.0.1:{server.server_port}'
+    REGISTRY = ORIGIN + '/mods/index.json'
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch(headless=True, args=['--no-sandbox'])
-            context = browser.new_context(viewport={'width': 1280, 'height': 900})
+            context = browser.new_context(ignore_https_errors=True, viewport={'width': 1280, 'height': 900})
             context.add_init_script("localStorage.setItem('guy-fights.menu-music-choice.v1', 'false');")
-            mode = {'value': 'offline', 'manifest': copy.deepcopy(GUY)}
-
-            def remote(route):
-                if mode['value'] == 'offline':
-                    route.abort('internetdisconnected')
-                    return
-                if route.request.url == REGISTRY:
-                    data = {'formatVersion': 99, 'mods': []} if mode['value'] == 'malformed' else {'formatVersion': 1, 'mods': [entry(mode['manifest'])]}
-                else:
-                    data = copy.deepcopy(mode['manifest'])
-                    if mode['value'] == 'mismatch':
-                        data['author'] = 'Mismatched author'
-                route.fulfill(status=200, content_type='application/json', body=json.dumps(data), headers={'Access-Control-Allow-Origin': '*'})
-
-            def game_files(route):
-                from urllib.request import urlopen
-                from urllib.parse import urlsplit
-                path = urlsplit(route.request.url).path
-                with urlopen(f'http://127.0.0.1:{server.server_port}' + path) as response:
-                    route.fulfill(status=response.status, headers=dict(response.headers), body=response.read())
-
-            context.route(ORIGIN + '/**', game_files)
-            context.route(ORIGIN + '/mods/**', remote)
+            mode = MODE
+            external_requests = []
+            context.route('https://blocked.invalid/**', lambda route: (external_requests.append(route.request.url), route.abort()))
             page = context.new_page()
             errors = []
             page.on('pageerror', lambda error: errors.append(str(error)))
@@ -71,11 +96,11 @@ def run():
                         return
                     page.wait_for_timeout(100)
                 raise AssertionError('Timed out: ' + expression + ' | UI: ' + page.locator('#modsStatus').inner_text())
-            page.goto(ORIGIN + '/src/guy_fights_0.2.4.html', wait_until='load', timeout=60000)
+            page.goto(ORIGIN + '/src/guy_fights_0.2.5.html', wait_until='load', timeout=60000)
             wait_expression('window.guyFightsMods && !window.guyGameBoot.active', timeout=40000)
             snapshot = lambda: page.evaluate('window.guyFightsMods.snapshot()')
             assert snapshot()['guys']['drunk-guy']['hp'] == 1000
-            assert page.locator('#versionLabel').inner_text() == 'Beta (0.2.4)'
+            assert page.locator('#versionLabel').inner_text() == 'Beta (0.2.5)'
             page.locator('#titleMods').click()
             wait_expression("window.guyFightsMods.snapshot().registryState === 'error'")
             assert 'Registry unavailable' in page.locator('#modsBrowse').inner_text()
@@ -188,6 +213,13 @@ def run():
 
             # Remote browser renders inert text, detects updates, and refuses metadata mismatch.
             page.locator('#titleMods').click()
+            for rejected_redirect in ('cross-origin', 'wrong-path'):
+                mode['value'] = rejected_redirect
+                page.locator('#refreshMods').click()
+                wait_expression("window.guyFightsMods.snapshot().registryState === 'error'")
+                assert 'Registry unavailable' in page.locator('#modsBrowse').inner_text()
+            assert not external_requests, 'CSP must block cross-origin redirect requests'
+            print('PASS actual redirect origin/path rejection and same-origin CSP', flush=True)
             mode['value'] = 'malformed'
             page.locator('#refreshMods').click()
             wait_expression("document.getElementById('modsBrowse').textContent.includes('Invalid registry')")
@@ -195,8 +227,10 @@ def run():
             mode['manifest']['version'] = '2.1.0'
             page.locator('#refreshMods').click()
             wait_expression("document.getElementById('modsBrowse').textContent.includes('Update available')")
+            mode['redirected'] = False
             page.locator('#modsBrowse').get_by_role('button', name='Update', exact=True).click()
             page.locator('#modsInstalled article').filter(has_text='v2.1.0').wait_for()
+            assert mode['redirected'], 'Manifest installation must follow an actual server redirect'
             mode['value'] = 'mismatch'
             mode['manifest']['version'] = '2.2.0'
             page.locator('#refreshMods').click()
@@ -228,6 +262,7 @@ def run():
             browser.close()
     finally:
         server.shutdown()
+        certificates.cleanup()
         server.server_close()
 
 

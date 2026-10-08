@@ -184,12 +184,25 @@ const GuyFightsModRuntime = (() => {
     }
     if (manifest.formatVersion !== formatVersion) fail('INVALID_MANIFEST', 'Format mismatch');
   }
+  function validateResponseURL(requested, finalURL) {
+    if (typeof finalURL !== 'string' || !finalURL.startsWith('https://') || /[%\\\s]/.test(finalURL) || finalURL.includes('?') || finalURL.includes('#')) fail('NETWORK', 'Unsafe response URL');
+    const rawPath = finalURL.slice(finalURL.indexOf('/', 8));
+    if (rawPath.split('/').some(part => part === '.' || part === '..')) fail('NETWORK', 'Response traversal is forbidden');
+    const parsed = new URL(finalURL);
+    if (parsed.username || parsed.password || parsed.origin !== new URL(registryURL()).origin || parsed.search || parsed.hash) fail('NETWORK', 'Unapproved response origin');
+    if (requested === registryURL()) {
+      if (parsed.pathname !== '/mods/index.json') fail('NETWORK', 'Unapproved registry response path');
+    } else if (manifestURL(finalURL) !== requested) fail('NETWORK', 'Unapproved manifest response path');
+    return finalURL;
+  }
   async function fetchJSON(url, limit, fetcher) {
     const abort = new AbortController();
     const timeout = setTimeout(() => abort.abort(), 10000);
+    let response;
     try {
-      const response = await fetcher(url, {signal: abort.signal, redirect: 'error', credentials: 'omit', referrerPolicy: 'no-referrer', cache: 'no-cache'});
-      if (!response.ok || response.url && response.url !== url) fail('NETWORK', 'Registry request failed or redirected');
+      response = await fetcher(url, {signal: abort.signal, redirect: 'follow', credentials: 'omit', referrerPolicy: 'no-referrer', cache: 'no-cache'});
+      validateResponseURL(url, response.url);
+      if (!response.ok) fail('NETWORK', 'Registry request failed');
       if (Number(response.headers?.get('content-length')) > limit) fail('INVALID_MANIFEST', 'Response too large');
       let bytes;
       if (response.body?.getReader) {
@@ -212,6 +225,10 @@ const GuyFightsModRuntime = (() => {
       try { text = new TextDecoder('utf-8', {fatal: true}).decode(bytes); }
       catch (_) { fail('INVALID_MANIFEST', 'Response is not valid UTF-8'); }
       return parse(text, limit);
+    } catch (error) {
+      const failure = error.code ? error : new ModError('NETWORK', 'Registry request failed');
+      failure.network = {requestedURL: url, finalResponseURL: response?.url ?? null, httpStatus: response?.status ?? null, exceptionName: error.name, exceptionMessage: error.message};
+      throw failure;
     } finally { clearTimeout(timeout); }
   }
   function message(error) {
@@ -219,7 +236,7 @@ const GuyFightsModRuntime = (() => {
     return messages[error.code] || 'Mod application error. Please try again.';
   }
   class Manager {
-    constructor({manifestSchema, catalogSchema, adapter, storage, fetcher = globalThis.fetch, gameVersion = '0.2.4', logger = console}) {
+    constructor({manifestSchema, catalogSchema, adapter, storage, fetcher = globalThis.fetch, gameVersion = '0.2.5', logger = console}) {
       this.manifestSchema = manifestSchema; this.catalogSchema = catalogSchema;
       this.adapter = adapter; this.storage = storage; this.fetcher = fetcher; this.gameVersion = gameVersion; this.logger = logger;
       this.installed = new Map(); this.enabled = []; this.errors = new Map(); this.catalog = null; this.registryState = 'idle'; this.registryError = null;
@@ -227,7 +244,7 @@ const GuyFightsModRuntime = (() => {
     }
     onChange(listener) { this.listeners.add(listener); return () => this.listeners.delete(listener); }
     notify() { for (const listener of this.listeners) { try { listener(); } catch (error) { this.logger.warn('[Mods] UI failure', error); } } }
-    log(context, error) { this.logger.warn('[Mods] ' + context, {code: error.code, detail: error.message}); }
+    log(context, error) { this.logger.warn('[Mods] ' + context, {code: error.code, detail: error.message, ...(error.network || {})}); }
     validate(manifest, checkCompatibility = true) { return validateManifest(manifest, this.manifestSchema, this.gameVersion, checkCompatibility); }
     record(installed = this.installed, enabled = this.enabled) { return {formatVersion: 1, installed: [...installed.values()], enabled}; }
     persist(installed, enabled) {
@@ -285,7 +302,7 @@ const GuyFightsModRuntime = (() => {
         try {
           let catalog;
           try { catalog = await fetchJSON(registryURL(), 1048576, this.fetcher); }
-          catch (error) { if (error.code === 'INVALID_MANIFEST') throw new ModError('INVALID_REGISTRY', error.message); throw new ModError('NETWORK', error.message); }
+          catch (error) { const failure = new ModError(error.code === 'INVALID_MANIFEST' ? 'INVALID_REGISTRY' : 'NETWORK', error.message); failure.network = error.network; throw failure; }
           this.catalog = validateCatalog(catalog, this.catalogSchema, this.gameVersion); this.registryState = 'ready'; this.registryError = null;
         } catch (error) { this.catalog = null; this.registryState = 'error'; this.registryError = error; this.log('browse', error); }
         finally { this.loading = null; this.notify(); }

@@ -17,12 +17,12 @@ function create(options = {}) {
   let active = false, duration = 60, player = null;
   const adapter = createAdapter({characters, terrainTypes: {mud: {}, shield: {}}, cloneCharacter: clone,
     active: () => active, applyDefaults: value => {duration = player ?? value.roundDuration;}, refresh() {}}, API);
-  const manager = new API.Manager({manifestSchema: schema, catalogSchema, adapter, storage, gameVersion: '0.2.3', logger: {warn() {}}, ...options});
+  const manager = new API.Manager({manifestSchema: schema, catalogSchema, adapter, storage, gameVersion: '0.2.5', logger: {warn() {}}, ...options});
   manager.load();manager.rebuild();
   return {manager, storage, adapter, characters, duration: () => duration, active: value => {active = value;}, player: value => {player = value;}};
 }
 function entry(mod, location = 'mods/' + mod.id + '/mod.json') {const {formatVersion, changes, ...metadata} = mod; return {...metadata, manifest: location};}
-function response(data, url) {const bytes = new TextEncoder().encode(JSON.stringify(data)); return {ok: true, url, headers: {get() {return null;}}, arrayBuffer: async () => bytes.buffer};}
+function response(data, url) {const bytes = new TextEncoder().encode(JSON.stringify(data)); return {ok: true, status: 200, url, headers: {get() {return null;}}, arrayBuffer: async () => bytes.buffer};}
 
 test('no mods: base definitions and timer are unchanged', () => {
   const game = create(); assert.equal(game.characters['Drunk Guy'].hp, 1000); assert.equal(game.duration(), 60); assert.deepEqual(game.manager.enabled, []);
@@ -151,4 +151,38 @@ test('production registry and manifests use the HTTPS page origin', () => {
   for (const path of ['https://raw.githubusercontent.com/GuyFights/guy-fights-mods/main/mods/example-mod/mod.json', '/mods/../mods/example-mod/mod.json', '/mods/example-mod/mod.json#x', '/mods/example-mod/mod.json#', '/mods/example-mod/mod.json?', '/mods/example-mod/mod.json?x=1', '/mods/%65xample-mod/mod.json', 'https://user@guyfights.neocities.org/mods/example-mod/mod.json', '/mods/constructor/mod.json']) assert.throws(() => API.manifestURL(path));
   const original = globalThis.location;
   try { globalThis.location = {origin: 'http://guyfights.neocities.org'}; assert.throws(() => API.registryURL()); } finally { globalThis.location = original; }
+});
+
+
+test('direct and safely redirected registry/manifest responses install through hosting flow', async () => {
+  const catalog = {formatVersion: 1, mods: [entry(example)]};
+  for (const redirected of [false, true]) {
+    const game = create({fetcher: async (url, options) => {
+      assert.equal(options.redirect, 'follow'); assert.equal(options.credentials, 'omit');
+      return {...response(url === API.registryURL() ? catalog : example, url), redirected};
+    }});
+    await game.manager.browse(); assert.equal(game.manager.registryState, 'ready');
+    await game.manager.installRemote(catalog.mods[0]); assert.equal(game.manager.status(example), 'Disabled');
+    game.manager.setEnabled(example.id, true); assert.equal(game.characters['Drunk Guy'].hp, 1200);
+  }
+});
+test('final registry and manifest URLs reject origins, paths, encoding and credentials', async () => {
+  const origin = globalThis.location.origin, catalog = {formatVersion: 1, mods: [entry(example)]};
+  for (const finalURL of ['https://evil.test/mods/index.json', origin + '/other/index.json', origin + '/mods/index.json?', origin + '/mods/index.json#x', origin + '/mods/%69ndex.json', origin + '/mods/../mods/index.json', 'https://user@guyfights.neocities.org/mods/index.json', 'http://guyfights.neocities.org/mods/index.json']) {
+    const game = create({fetcher: async () => response(catalog, finalURL)});
+    await game.manager.browse(); assert.equal(game.manager.registryState, 'error');
+  }
+  for (const finalURL of ['https://evil.test/mods/example-mod/mod.json', origin + '/mods/another-mod/mod.json', origin + '/other/mod.json', origin + '/mods/example-mod/mod.json?', origin + '/mods/example-mod/mod.json#', origin + '/mods/%65xample-mod/mod.json', origin + '/mods/constructor/mod.json', origin + '/mods/../mods/example-mod/mod.json', origin + '/mods/example-mod/mod.js', '', origin + '/mods/example-mod\\mod.json']) {
+    const game = create({fetcher: async url => response(url === API.registryURL() ? catalog : example, url === API.registryURL() ? url : finalURL)});
+    await game.manager.browse(); await assert.rejects(game.manager.installRemote(catalog.mods[0])); assert.equal(game.manager.installed.size, 0);
+  }
+});
+test('developer network logs preserve request, final URL, status and original exception', async () => {
+  const logs = [], logger = {warn(...args) {logs.push(args);}};
+  const game = create({logger, fetcher: async () => {throw new TypeError('connection failed');}});
+  await game.manager.browse(); assert.equal(logs[0][1].requestedURL, API.registryURL()); assert.equal(logs[0][1].exceptionName, 'TypeError'); assert.equal(logs[0][1].exceptionMessage, 'connection failed');
+  assert.equal(logs[0][1].finalResponseURL, null); assert.equal(logs[0][1].httpStatus, null);
+  assert.equal(API.message(game.manager.registryError).includes('connection failed'), false);
+  game.manager.fetcher = async url => ({...response({}, url), ok: false, status: 503});
+  await game.manager.browse(); assert.equal(logs[1][1].httpStatus, 503); assert.equal(logs[1][1].finalResponseURL, API.registryURL());
 });
