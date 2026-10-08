@@ -1,0 +1,421 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Guy Fights mod manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "formatVersion",
+    "apiVersion",
+    "id",
+    "name",
+    "author",
+    "version",
+    "description",
+    "compatibility",
+    "tags",
+    "changes"
+  ],
+  "properties": {
+    "formatVersion": {
+      "type": "integer",
+      "const": 1
+    },
+    "id": {
+      "$ref": "#/$defs/id"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 100
+    },
+    "author": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 100
+    },
+    "version": {
+      "$ref": "#/$defs/version"
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2000
+    },
+    "compatibility": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "minimum",
+        "maximum"
+      ],
+      "properties": {
+        "minimum": {
+          "$ref": "#/$defs/version"
+        },
+        "maximum": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*|x)$"
+        }
+      }
+    },
+    "tags": {
+      "type": "array",
+      "uniqueItems": true,
+      "maxItems": 20,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 40
+      }
+    },
+    "changes": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "guys": {
+          "$ref": "#/$defs/guyOperations"
+        },
+        "zones": {
+          "$ref": "#/$defs/zoneOperations"
+        },
+        "matchSettings": {
+          "$ref": "#/$defs/matchSettingsValues"
+        },
+        "projectiles": {
+          "$ref": "#/$defs/projectileOperations"
+        }
+      },
+      "required": [],
+      "minProperties": 1
+    },
+    "apiVersion": {
+      "type": "integer",
+      "const": 1
+    }
+  },
+  "$defs": {
+    "version": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+      "maxLength": 64,
+      "not": {
+        "enum": [
+          "prototype",
+          "constructor"
+        ]
+      }
+    },
+    "guyValues": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "hp": {
+          "type": "number",
+          "minimum": 1,
+          "maximum": 1000000
+        },
+        "baseDamage": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "width": {
+          "type": "number",
+          "minimum": 8,
+          "maximum": 1000
+        },
+        "height": {
+          "type": "number",
+          "minimum": 8,
+          "maximum": 1000
+        },
+        "movementSpeedMin": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 5000
+        },
+        "movementSpeedMax": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 5000
+        },
+        "projectileInterval": {
+          "type": "number",
+          "minimum": 0.05,
+          "maximum": 3600
+        },
+        "projectileSpeed": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 5000
+        },
+        "projectileSize": {
+          "type": "number",
+          "minimum": 1,
+          "maximum": 240
+        },
+        "projectileCount": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 32
+        },
+        "projectileShotSpacing": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 60
+        },
+        "sleepDuration": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 60
+        },
+        "healingAmount": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "healingInterval": {
+          "type": "number",
+          "minimum": 0.05,
+          "maximum": 3600
+        }
+      },
+      "required": [],
+      "minProperties": 1
+    },
+    "guyModify": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/guyId"
+        },
+        "set": {
+          "$ref": "#/$defs/guyValues"
+        }
+      },
+      "required": [
+        "id",
+        "set"
+      ]
+    },
+    "guyOperations": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "modify": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 100,
+          "items": {
+            "$ref": "#/$defs/guyModify"
+          }
+        }
+      },
+      "required": [
+        "modify"
+      ]
+    },
+    "zoneValues": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "strength": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "duration": {
+          "type": "number",
+          "minimum": 0.05,
+          "maximum": 300
+        },
+        "movementMultiplier": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 4
+        },
+        "blocksProjectiles": {
+          "type": "boolean"
+        },
+        "radius": {
+          "type": "number",
+          "minimum": 1,
+          "maximum": 2000
+        },
+        "color": {
+          "type": "string",
+          "pattern": "^#[0-9A-Fa-f]{6}$"
+        },
+        "opacity": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      },
+      "required": [],
+      "minProperties": 1
+    },
+    "zoneModify": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/zoneId"
+        },
+        "set": {
+          "$ref": "#/$defs/zoneValues"
+        }
+      },
+      "required": [
+        "id",
+        "set"
+      ]
+    },
+    "zoneOperations": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "modify": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 100,
+          "items": {
+            "$ref": "#/$defs/zoneModify"
+          }
+        }
+      },
+      "required": [
+        "modify"
+      ]
+    },
+    "projectileValues": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "speed": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 5000
+        },
+        "damage": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 10000
+        },
+        "size": {
+          "type": "number",
+          "minimum": 1,
+          "maximum": 500
+        },
+        "lifetime": {
+          "type": "number",
+          "minimum": 0.05,
+          "maximum": 300
+        },
+        "bounceCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "color": {
+          "type": "string",
+          "pattern": "^#[0-9A-Fa-f]{6}$"
+        }
+      },
+      "required": [],
+      "minProperties": 1
+    },
+    "projectileModify": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "set": {
+          "$ref": "#/$defs/projectileValues"
+        }
+      },
+      "required": [
+        "id",
+        "set"
+      ]
+    },
+    "projectileOperations": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "modify": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 100,
+          "items": {
+            "$ref": "#/$defs/projectileModify"
+          }
+        }
+      },
+      "required": [
+        "modify"
+      ]
+    },
+    "matchSettingsValues": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "roundDuration": {
+          "type": "number",
+          "minimum": 10,
+          "maximum": 3600
+        },
+        "scoreLimit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "friendlyFire": {
+          "type": "boolean"
+        }
+      },
+      "required": [],
+      "minProperties": 1
+    },
+    "guyId": {
+      "type": "string",
+      "enum": [
+        "drunk-guy",
+        "angry-guy",
+        "tired-guy",
+        "business-guy",
+        "badass-cool-guy",
+        "chef-guy",
+        "woman-guy",
+        "tennis-guy",
+        "boxing-guy",
+        "magician-guy",
+        "gravity-guy",
+        "dealer-guy"
+      ]
+    },
+    "zoneId": {
+      "type": "string",
+      "enum": [
+        "river",
+        "lava",
+        "mud",
+        "ice",
+        "poison",
+        "healing",
+        "boost",
+        "wind",
+        "shield",
+        "wall"
+      ]
+    }
+  },
+  "description": "External Mod API v1. Guy and terrain IDs and Guy limits are verified against the supplied Beta 0.2.2 integration reference. Game adapters must explicitly map fields; schema validity alone does not establish runtime support."
+}

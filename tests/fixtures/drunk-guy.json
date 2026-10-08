@@ -1,0 +1,33 @@
+{
+  "formatVersion": 1,
+  "apiVersion": 1,
+  "id": "example-mod",
+  "name": "Drunk Guy stat example",
+  "author": "GuyFights",
+  "version": "2.0.0",
+  "description": "Changes Drunk Guy HP, base damage, and projectile defaults. Requires the game-side Mod API v1 adapter.",
+  "compatibility": {
+    "minimum": "0.2.2",
+    "maximum": "0.2.x"
+  },
+  "tags": [
+    "example",
+    "guy-stats"
+  ],
+  "changes": {
+    "guys": {
+      "modify": [
+        {
+          "id": "drunk-guy",
+          "set": {
+            "hp": 1200,
+            "baseDamage": 130,
+            "projectileSpeed": 900,
+            "projectileSize": 50,
+            "projectileInterval": 1.8
+          }
+        }
+      ]
+    }
+  }
+}

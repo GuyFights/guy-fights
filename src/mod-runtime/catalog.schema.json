@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Guy Fights mod catalog",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "formatVersion",
+    "mods"
+  ],
+  "properties": {
+    "formatVersion": {
+      "type": "integer",
+      "const": 1
+    },
+    "mods": {
+      "type": "array",
+      "maxItems": 1000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "$ref": "#/$defs/id"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "author": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "version": {
+            "$ref": "#/$defs/version"
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "compatibility": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "minimum",
+              "maximum"
+            ],
+            "properties": {
+              "minimum": {
+                "$ref": "#/$defs/version"
+              },
+              "maximum": {
+                "type": "string",
+                "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*|x)$"
+              }
+            }
+          },
+          "tags": {
+            "type": "array",
+            "uniqueItems": true,
+            "maxItems": 20,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 40
+            }
+          },
+          "apiVersion": {
+            "type": "integer",
+            "const": 1
+          },
+          "manifest": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2048,
+            "description": "Registry-relative JSON path or trusted HTTPS JSON URL; enforce origin/path policy at runtime."
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "author",
+          "version",
+          "description",
+          "compatibility",
+          "tags",
+          "apiVersion",
+          "manifest"
+        ]
+      }
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+      "maxLength": 64,
+      "not": {
+        "enum": [
+          "prototype",
+          "constructor"
+        ]
+      }
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+    }
+  }
+}

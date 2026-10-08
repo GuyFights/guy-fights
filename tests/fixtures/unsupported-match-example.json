@@ -1,0 +1,24 @@
+{
+  "formatVersion": 1,
+  "apiVersion": 1,
+  "id": "example-match-settings",
+  "name": "Match defaults integration example",
+  "author": "GuyFights",
+  "version": "1.0.0",
+  "description": "Integration template for player-editable match defaults. Requires verified game mappings; not installable in unmodified Beta 0.2.2.",
+  "compatibility": {
+    "minimum": "0.2.2",
+    "maximum": "0.2.x"
+  },
+  "tags": [
+    "example",
+    "integration-template"
+  ],
+  "changes": {
+    "matchSettings": {
+      "roundDuration": 180,
+      "scoreLimit": 5,
+      "friendlyFire": false
+    }
+  }
+}
