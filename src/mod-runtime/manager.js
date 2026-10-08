@@ -1,7 +1,13 @@
 /* Mod API v1. Schema snapshots come verbatim from guy-fights-mods, not the network. */
 const GuyFightsModRuntime = (() => {
   'use strict';
-  const REGISTRY_URL = 'https://raw.githubusercontent.com/GuyFights/guy-fights-mods/main/index.json';
+  const REGISTRY_URL = '/mods/index.json';
+  function registryURL() {
+    let origin;
+    try { origin = new URL(globalThis.location?.origin); } catch (_) { fail('NETWORK', 'Registry requires an HTTPS page origin'); }
+    if (origin.protocol !== 'https:' || origin.username || origin.password) fail('NETWORK', 'Registry requires an HTTPS page origin');
+    return new URL(REGISTRY_URL, origin.origin).href;
+  }
   const STORAGE_KEY = 'guyFights.mods.v1';
   const own = (object, key) => Object.hasOwn(object, key);
   const forbidden = new Set(['__proto__', 'prototype', 'constructor']);
@@ -137,14 +143,15 @@ const GuyFightsModRuntime = (() => {
     return compareVersions(version, range.minimum) >= 0 && underHigh;
   }
   function manifestURL(reference) {
-    if (typeof reference !== 'string' || /[%\\\s]/.test(reference)) fail('INVALID_REGISTRY', 'Unsafe manifest path');
+    if (typeof reference !== 'string' || reference.includes('?') || reference.includes('#') || /[%\\\s]/.test(reference)) fail('INVALID_REGISTRY', 'Unsafe manifest path');
     const relative = !reference.startsWith('https://');
-    if (relative && (reference.startsWith('/') || reference.includes(':'))) fail('INVALID_REGISTRY', 'Manifest must be registry-relative or HTTPS');
+    if (relative && (reference.startsWith('//') || reference.includes(':'))) fail('INVALID_REGISTRY', 'Manifest must be registry-relative or HTTPS');
     const rawPath = relative ? reference : reference.slice(reference.indexOf('/', 8));
     if (rawPath.split('/').some(part => part === '.' || part === '..')) fail('INVALID_REGISTRY', 'Traversal is forbidden');
-    let url; try { url = new URL(reference, REGISTRY_URL); } catch (_) { fail('INVALID_REGISTRY', 'Invalid manifest URL'); }
-    const prefix = '/GuyFights/guy-fights-mods/main/';
-    if (url.protocol !== 'https:' || url.origin !== 'https://raw.githubusercontent.com' || url.username || url.password || url.search || url.hash || !url.pathname.startsWith(prefix) || !/^mods\/[a-z0-9]+(?:-[a-z0-9]+)*\/mod\.json$/.test(url.pathname.slice(prefix.length))) fail('INVALID_REGISTRY', 'Unapproved manifest URL');
+    let url; try { url = new URL(reference, new URL('/', registryURL())); } catch (_) { fail('INVALID_REGISTRY', 'Invalid manifest URL'); }
+    const origin = new URL(registryURL()).origin;
+    const match = /^\/mods\/([a-z0-9]+(?:-[a-z0-9]+)*)\/mod\.json$/.exec(url.pathname);
+    if (url.protocol !== 'https:' || url.origin !== origin || url.username || url.password || url.search || url.hash || !match || match[1].length > 64 || ['prototype', 'constructor'].includes(match[1])) fail('INVALID_REGISTRY', 'Unapproved manifest URL');
     return url.href;
   }
   function validateManifest(manifest, schema, gameVersion, checkCompatibility = true) {
@@ -212,7 +219,7 @@ const GuyFightsModRuntime = (() => {
     return messages[error.code] || 'Mod application error. Please try again.';
   }
   class Manager {
-    constructor({manifestSchema, catalogSchema, adapter, storage, fetcher = globalThis.fetch, gameVersion = '0.2.3', logger = console}) {
+    constructor({manifestSchema, catalogSchema, adapter, storage, fetcher = globalThis.fetch, gameVersion = '0.2.4', logger = console}) {
       this.manifestSchema = manifestSchema; this.catalogSchema = catalogSchema;
       this.adapter = adapter; this.storage = storage; this.fetcher = fetcher; this.gameVersion = gameVersion; this.logger = logger;
       this.installed = new Map(); this.enabled = []; this.errors = new Map(); this.catalog = null; this.registryState = 'idle'; this.registryError = null;
@@ -277,7 +284,7 @@ const GuyFightsModRuntime = (() => {
       this.loading = (async () => {
         try {
           let catalog;
-          try { catalog = await fetchJSON(REGISTRY_URL, 1048576, this.fetcher); }
+          try { catalog = await fetchJSON(registryURL(), 1048576, this.fetcher); }
           catch (error) { if (error.code === 'INVALID_MANIFEST') throw new ModError('INVALID_REGISTRY', error.message); throw new ModError('NETWORK', error.message); }
           this.catalog = validateCatalog(catalog, this.catalogSchema, this.gameVersion); this.registryState = 'ready'; this.registryError = null;
         } catch (error) { this.catalog = null; this.registryState = 'error'; this.registryError = error; this.log('browse', error); }
@@ -343,6 +350,6 @@ const GuyFightsModRuntime = (() => {
       return result;
     }
   }
-  return {Manager, ModError, fail, parse, inspect, schemaValidate, validateManifest, validateCatalog, compatibility, compareVersions, manifestURL, agree, equal, message, REGISTRY_URL, STORAGE_KEY};
+  return {Manager, ModError, fail, parse, inspect, schemaValidate, validateManifest, validateCatalog, compatibility, compareVersions, manifestURL, agree, equal, message, registryURL, REGISTRY_URL, STORAGE_KEY};
 })();
 if (typeof module !== 'undefined' && module.exports) module.exports = GuyFightsModRuntime;

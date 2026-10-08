@@ -35,6 +35,8 @@ def main():
             Draft202012Validator(schema).validate(data)
     original = subprocess.check_output(['git', 'show', 'HEAD:src/guy_fights_0.2.2.html'], cwd=ROOT)
     assert BASE.read_bytes() == original, 'Original game source changed'
+    previous = ROOT / 'src/guy_fights_0.2.3.html'
+    assert previous.read_bytes() == subprocess.check_output(['git', 'show', 'HEAD:src/guy_fights_0.2.3.html'], cwd=ROOT), 'Beta 0.2.3 changed'
     expected = OUTPUT.read_bytes()
     build()
     assert OUTPUT.read_bytes() == expected, 'Generated game was stale; review rebuilt output and rerun'

@@ -1,4 +1,4 @@
-"""Rebuild standalone 0.2.3 from preserved 0.2.2 and reviewed local runtime sources."""
+"""Rebuild standalone 0.2.4 from preserved 0.2.2 and reviewed local runtime sources."""
 import hashlib
 import json
 import re
@@ -6,7 +6,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 BASE = ROOT / 'src/guy_fights_0.2.2.html'
-OUTPUT = ROOT / 'src/guy_fights_0.2.3.html'
+OUTPUT = ROOT / 'src/guy_fights_0.2.4.html'
 
 
 def build():
@@ -25,11 +25,10 @@ def build():
     code = schemas + '\n' + '\n'.join((runtime / name).read_text() for name in ['manager.js', 'adapter.js', 'browser.js', 'integration.js'])
     # Keep code in the original trusted gameSource payload, preserving its boot mechanism.
     replace('<script id="gameSource" type="text/plain">\n(() => {', '<script id="gameSource" type="text/plain">\n(() => {\n' + code)
-    replace("connect-src 'self'", "connect-src 'self' https://raw.githubusercontent.com")
-    replace("const GAME_VERSION = '0.2.2';", "const GAME_VERSION = '0.2.3';")
-    replace('<title>Guy Fights — Beta (0.2.2)</title>', '<title>Guy Fights — Beta (0.2.3)</title>')
-    replace('>Beta (0.2.2)</span>', '>Beta (0.2.3)</span>')
-    replace('version:GAME_VERSION,build:104', 'version:GAME_VERSION,build:105')
+    replace("const GAME_VERSION = '0.2.2';", "const GAME_VERSION = '0.2.4';")
+    replace('<title>Guy Fights — Beta (0.2.2)</title>', '<title>Guy Fights — Beta (0.2.4)</title>')
+    replace('>Beta (0.2.2)</span>', '>Beta (0.2.4)</span>')
+    replace('version:GAME_VERSION,build:104', 'version:GAME_VERSION,build:106')
     replace('</style>', '#modsDialog .mod-card{margin:12px 0;padding:14px;border:2px solid var(--theme-divider,#b9cbd6);border-radius:6px;background:var(--theme-panel,#fff);overflow-wrap:anywhere}\n#modsDialog .mod-card button{margin:4px 8px 4px 0}\n#modsDialog section{margin-block:18px}\n#modsDialog [role="status"]{overflow-wrap:anywhere}\n</style>')
     replace('<button id="titleSettings">Settings</button>', '<button id="titleSettings">Settings</button>\n      <button id="titleMods">MODS</button>')
     dialog = '''<dialog id="modsDialog" class="settings-dialog info-dialog" aria-labelledby="modsHeading">
@@ -42,7 +41,7 @@ def build():
 </dialog>
 '''
     replace('<dialog id="changelogDialog"', dialog + '<dialog id="changelogDialog"')
-    replace('<h2 id="changelogHeading">Changelog</h2><button id="closeChangelog">Close</button></div>', '<h2 id="changelogHeading">Changelog</h2><button id="closeChangelog">Close</button></div>\n  <article class="menu-card"><h3>0.2.3 — Mod Runtime v1</h3><ul><li>Added a JSON-only Mods browser, local installation, enabled order, and offline installed mods.</li><li>Fresh game definitions prevent stacked changes; unsupported operations are rejected.</li><li>Guy stats, selected terrain and bottle projectile properties, and editable round-duration defaults are supported.</li></ul></article>')
+    replace('<h2 id="changelogHeading">Changelog</h2><button id="closeChangelog">Close</button></div>', '<h2 id="changelogHeading">Changelog</h2><button id="closeChangelog">Close</button></div>\n  <article class="menu-card"><h3>0.2.4 — Mod Browser hotfix</h3><ul><li>Fetch registry JSON from the same-origin /mods/ mirror for hosting CSP compatibility.</li><li>Strict HTTPS manifest validation and offline installed mods remain supported.</li></ul></article>\n  <article class="menu-card"><h3>0.2.3 — Mod Runtime v1</h3><ul><li>Added a JSON-only Mods browser, local installation, enabled order, and offline installed mods.</li><li>Fresh game definitions prevent stacked changes; unsupported operations are rejected.</li><li>Guy stats, selected terrain and bottle projectile properties, and editable round-duration defaults are supported.</li></ul></article>')
     # Timing accepts schema-valid fractional defaults without rounding on load or edit.
     replace('return Math.round(Math.max(Number(input.min), Math.min(Number(input.max), value)));', 'const bounded = Math.max(Number(input.min), Math.min(Number(input.max), value));\n      return key === "duration" ? bounded : Math.round(bounded);')
     replace('timerSettings.duration=Math.round(savedNumber(timer.duration,Number(timerDuration.min),Number(timerDuration.max),60));', 'timerSettings.duration=savedNumber(timer.duration,Number(timerDuration.min),Number(timerDuration.max),60);')

@@ -1,12 +1,12 @@
-# Mod Runtime v1 — Beta 0.2.3
+# Mod Runtime v1 — Beta 0.2.4
 
-The shipped build is `src/guy_fights_0.2.3.html`, a standalone HTML file with the runtime and schemas embedded. `src/guy_fights_0.2.2.html` is preserved byte-for-byte. No public registry entries were added. This feature is implemented in the game repository, not in the registry repository.
+The shipped build is `src/guy_fights_0.2.4.html`, a standalone HTML file with the runtime and schemas embedded. `src/guy_fights_0.2.2.html` and `src/guy_fights_0.2.3.html` are preserved byte-for-byte. No public registry entries were added. This feature is implemented in the game repository, not in the registry repository.
 
 ## Protocol provenance
 
 The public contract is [GuyFights/guy-fights-mods](https://github.com/GuyFights/guy-fights-mods), commit `4a0ee09b88b34e044251fef0c685cb7216ea5819`: README, `docs/mod-api-v1.md` including integration notes, manifest/catalog schemas, offline validator, and both example manifests. The two files under `src/mod-runtime/*.schema.json` are verbatim snapshots of those authoritative schemas. There is no second format, schema download at startup, or remote code dependency. The runtime implements the exact validation keywords used by these snapshots; unsupported schema keywords fail closed. When updating snapshots, review keyword support and adapters, then run the tests.
 
-The original source SHA-256 is `83d13e6e5c167c4c0b1abe882ad17a690d844e2afd5da61eec2347b064539810`. The new build identifies itself as Beta 0.2.3 but retains the 0.2.2 game data and mechanics except the explicit Mod Runtime integration. Compatibility is checked against `0.2.3`; manifests accepting `0.2.2` through `0.2.x` work. An exact maximum of `0.2.2` is correctly incompatible with this newer build.
+The original source SHA-256 is `83d13e6e5c167c4c0b1abe882ad17a690d844e2afd5da61eec2347b064539810`. The new build identifies itself as Beta 0.2.4 but retains the 0.2.2 game data and mechanics except the explicit Mod Runtime integration. Compatibility is checked against `0.2.4`; manifests accepting `0.2.2` through `0.2.x` work. An exact maximum of `0.2.2` is correctly incompatible with this newer build.
 
 ## Base definitions and application
 
@@ -77,9 +77,11 @@ Stored manifests and enabled IDs are untrusted and revalidated on each startup. 
 
 ## Network and browser
 
-Browse fetches `https://raw.githubusercontent.com/GuyFights/guy-fights-mods/main/index.json` only when requested; there is no startup dependency on GitHub. Installed mods remain usable offline. Registry and manifests must conform to the pinned schemas, compatibility, and exact shared metadata including ordered tags. Duplicate catalog IDs/JSON keys are rejected.
+Browse resolves `/mods/index.json` against the current page origin and fetches it only when requested; there is no startup dependency on GitHub. Installed mods remain usable offline. Registry and manifests must conform to the pinned schemas, compatibility, and exact shared metadata including ordered tags. Duplicate catalog IDs/JSON keys are rejected.
 
-Manifest URLs must be registry-relative `mods/<slug>/mod.json` paths or absolute HTTPS URLs under the exact `raw.githubusercontent.com/GuyFights/guy-fights-mods/main/` prefix. Credentials, query strings, fragments, traversal, percent/backslash tricks, script extensions, and other origins are rejected. Requests omit credentials, disallow redirects, have a 10-second timeout, and enforce streaming byte limits (1 MiB catalog, 256 KiB manifest). JSON parsing rejects duplicate and prototype-sensitive keys, nesting deeper than 16, and all nonfinite numbers including overflow. Remote names/descriptions/tags are rendered with `textContent`. No runtime strings are evaluated or loaded as scripts. The existing CSP is extended only for HTTPS data fetches to `raw.githubusercontent.com`, not for remote scripts.
+GitHub remains the source of truth. Production registry JSON is mirrored to the Neocities site because hosting CSP blocks direct GitHub registry fetches. Copy the repository `index.json` to `/mods/index.json` and each `mods/<slug>/mod.json` to `/mods/<slug>/mod.json`, preserving matching metadata. Publish manifests before the catalog so entries do not point to missing files. No automatic mirroring or deployment is included in this hotfix.
+
+Manifest URLs must resolve to the current HTTPS page origin and match `/mods/<slug>/mod.json`. Catalog paths such as `mods/drunk-guy-overdrive/mod.json` resolve from the origin root, not from `/mods/index.json` (which would duplicate `/mods/`). Root-relative paths and absolute same-origin HTTPS URLs are also accepted. Slugs follow the public ID syntax and 64-character limit; prototype-sensitive IDs are rejected. HTTP and file pages cannot browse remotely; installed and local imported mods remain usable. Credentials, query strings, fragments, traversal, percent/backslash tricks, script extensions, and other origins are rejected. Requests omit credentials, disallow redirects, have a 10-second timeout, and enforce streaming byte limits (1 MiB catalog, 256 KiB manifest). JSON parsing rejects duplicate and prototype-sensitive keys, nesting deeper than 16, and all nonfinite numbers including overflow. Remote names/descriptions/tags are rendered with `textContent`. No runtime strings are evaluated or loaded as scripts. The game retains `connect-src 'self'`; no remote domain is added to CSP.
 
 The main-menu MODS dialog includes Browse/Installed sections, metadata, install/update detection, toggle, uninstall, conflict warnings, loading/offline/invalid/incompatible/application-error statuses, and an optional local JSON file import. Installation does not enable the mod. New Mod UI text is currently English; existing translation behavior and canonical IDs are preserved.
 

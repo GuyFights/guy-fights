@@ -2,6 +2,7 @@ const {test} = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+globalThis.location = {origin: 'https://guyfights.neocities.org'};
 const API = require('../src/mod-runtime/manager.js');
 const createAdapter = require('../src/mod-runtime/adapter.js');
 const root = path.join(__dirname, '..');
@@ -117,7 +118,7 @@ test('drunk-bottle projectile mapping supports speed, size, damage; Guy launch s
   game.manager.setEnabled(shot.id, false); game.manager.setEnabled(shot.id, true); assert.equal(game.characters['Drunk Guy'].projectile.speed, 900);
 });
 test('safe URL policy rejects scripts, unapproved origins, redirects and traversal', () => {
-  assert.equal(API.manifestURL('mods/example-mod/mod.json'), 'https://raw.githubusercontent.com/GuyFights/guy-fights-mods/main/mods/example-mod/mod.json');
+  assert.equal(API.manifestURL('mods/example-mod/mod.json'), 'https://guyfights.neocities.org/mods/example-mod/mod.json');
   for (const url of ['javascript:alert(1)', 'http://raw.githubusercontent.com/mod.json', '//evil.test/mod.json', '../mods/example-mod/mod.json', 'mods/%2e%2e/mod.json', 'https://evil.test/mod.json', 'mods/example-mod/mod.js', 'mods/example-mod/mod.json?x=1', 'https://raw.githubusercontent.com/GuyFights/guy-fights-mods/main/../main/mods/example-mod/mod.json']) assert.throws(() => API.manifestURL(url));
 });
 test('registry network failure and malformed registry do not affect installed mods', async () => {
@@ -127,7 +128,7 @@ test('registry network failure and malformed registry do not affect installed mo
 });
 test('remote install compares all metadata, remains disabled, and detects/applies a newer update', async () => {
   let remote = clone(example); let catalog = {formatVersion: 1, mods: [entry(remote)]};
-  const game = create({fetcher: async url => response(url === API.REGISTRY_URL ? catalog : remote, url)});
+  const game = create({fetcher: async url => response(url === API.registryURL() ? catalog : remote, url)});
   await game.manager.browse(); await game.manager.installRemote(catalog.mods[0]); assert.equal(game.manager.enabled.length, 0);
   remote.version = '2.1.0'; catalog = {formatVersion: 1, mods: [entry(remote)]}; await game.manager.browse(); assert.equal(API.compareVersions(catalog.mods[0].version, game.manager.installed.get(remote.id).version), 1);
   await game.manager.installRemote(catalog.mods[0]); assert.equal(game.manager.installed.get(remote.id).version, '2.1.0');
@@ -141,4 +142,13 @@ test('remote install compares all metadata, remains disabled, and detects/applie
 test('storage write failure does not claim installation or break the game', () => {
   const {manager, characters} = create({storage: {getItem() {}, setItem() {throw new Error('denied');}}});
   assert.throws(() => manager.install(example), /Cannot save/); assert.equal(manager.installed.size, 0); assert.equal(characters['Drunk Guy'].hp, 1000);
+});
+
+test('production registry and manifests use the HTTPS page origin', () => {
+  assert.equal(API.REGISTRY_URL, '/mods/index.json');
+  assert.equal(API.registryURL(), 'https://guyfights.neocities.org/mods/index.json');
+  for (const path of ['mods/example-mod/mod.json', '/mods/example-mod/mod.json', 'https://guyfights.neocities.org/mods/example-mod/mod.json']) assert.equal(API.manifestURL(path), 'https://guyfights.neocities.org/mods/example-mod/mod.json');
+  for (const path of ['https://raw.githubusercontent.com/GuyFights/guy-fights-mods/main/mods/example-mod/mod.json', '/mods/../mods/example-mod/mod.json', '/mods/example-mod/mod.json#x', '/mods/example-mod/mod.json#', '/mods/example-mod/mod.json?', '/mods/example-mod/mod.json?x=1', '/mods/%65xample-mod/mod.json', 'https://user@guyfights.neocities.org/mods/example-mod/mod.json', '/mods/constructor/mod.json']) assert.throws(() => API.manifestURL(path));
+  const original = globalThis.location;
+  try { globalThis.location = {origin: 'http://guyfights.neocities.org'}; assert.throws(() => API.registryURL()); } finally { globalThis.location = original; }
 });

@@ -10,7 +10,8 @@ from pathlib import Path
 from playwright.sync_api import sync_playwright
 
 ROOT = Path(__file__).resolve().parents[1]
-REGISTRY = 'https://raw.githubusercontent.com/GuyFights/guy-fights-mods/main/index.json'
+ORIGIN = 'https://guyfights.neocities.org'
+REGISTRY = ORIGIN + '/mods/index.json'
 GUY = json.loads((ROOT / 'tests/fixtures/drunk-guy.json').read_text())
 MATCH = copy.deepcopy(GUY)
 MATCH.update(id='local-match', name='Local match defaults', changes={'matchSettings': {'roundDuration': 180.5}})
@@ -49,7 +50,15 @@ def run():
                         data['author'] = 'Mismatched author'
                 route.fulfill(status=200, content_type='application/json', body=json.dumps(data), headers={'Access-Control-Allow-Origin': '*'})
 
-            context.route('https://raw.githubusercontent.com/**', remote)
+            def game_files(route):
+                from urllib.request import urlopen
+                from urllib.parse import urlsplit
+                path = urlsplit(route.request.url).path
+                with urlopen(f'http://127.0.0.1:{server.server_port}' + path) as response:
+                    route.fulfill(status=response.status, headers=dict(response.headers), body=response.read())
+
+            context.route(ORIGIN + '/**', game_files)
+            context.route(ORIGIN + '/mods/**', remote)
             page = context.new_page()
             errors = []
             page.on('pageerror', lambda error: errors.append(str(error)))
@@ -62,11 +71,11 @@ def run():
                         return
                     page.wait_for_timeout(100)
                 raise AssertionError('Timed out: ' + expression + ' | UI: ' + page.locator('#modsStatus').inner_text())
-            page.goto(f'http://127.0.0.1:{server.server_port}/src/guy_fights_0.2.3.html', wait_until='load', timeout=60000)
+            page.goto(ORIGIN + '/src/guy_fights_0.2.4.html', wait_until='load', timeout=60000)
             wait_expression('window.guyFightsMods && !window.guyGameBoot.active', timeout=40000)
             snapshot = lambda: page.evaluate('window.guyFightsMods.snapshot()')
             assert snapshot()['guys']['drunk-guy']['hp'] == 1000
-            assert page.locator('#versionLabel').inner_text() == 'Beta (0.2.3)'
+            assert page.locator('#versionLabel').inner_text() == 'Beta (0.2.4)'
             page.locator('#titleMods').click()
             wait_expression("window.guyFightsMods.snapshot().registryState === 'error'")
             assert 'Registry unavailable' in page.locator('#modsBrowse').inner_text()
